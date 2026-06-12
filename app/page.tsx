@@ -12,38 +12,51 @@ type ConvertResult = {
 export default function Home() {
   const [results, setResults] = useState<ConvertResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
 
     setIsLoading(true);
-    setErrorMessage(null);
     setResults([]);
 
-    const formData = new FormData();
-    Array.from(fileList).forEach((file) => formData.append("files", file));
+    const files = Array.from(fileList);
+    const allResults: ConvertResult[] = [];
 
-    try {
-      const response = await fetch("/api/convert", {
-        method: "POST",
-        body: formData,
-      });
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("files", file);
 
-      const data = await response.json();
+      try {
+        const response = await fetch("/api/convert", {
+          method: "POST",
+          body: formData,
+        });
 
-      if (!response.ok && !data.results) {
-        setErrorMessage(data.error ?? "Ocurrió un error al convertir los archivos.");
-        return;
+        const data = await response.json().catch(() => null);
+
+        if (!data || !Array.isArray(data.results)) {
+          allResults.push({
+            name: file.name,
+            error:
+              response.status === 413
+                ? "El archivo es demasiado grande para procesarlo."
+                : "Ocurrió un error al convertir el archivo.",
+          });
+          continue;
+        }
+
+        allResults.push(...data.results);
+      } catch {
+        allResults.push({
+          name: file.name,
+          error: "No se pudo conectar con el servidor. Inténtalo de nuevo.",
+        });
       }
-
-      setResults(data.results ?? []);
-    } catch {
-      setErrorMessage("No se pudo conectar con el servidor. Inténtalo de nuevo.");
-    } finally {
-      setIsLoading(false);
     }
+
+    setResults(allResults);
+    setIsLoading(false);
   };
 
   const downloadMarkdown = (result: ConvertResult) => {
@@ -124,12 +137,6 @@ export default function Home() {
 
         {isLoading && (
           <p className="text-center text-zinc-600 dark:text-zinc-400">Convirtiendo archivos…</p>
-        )}
-
-        {errorMessage && (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {errorMessage}
-          </p>
         )}
 
         {results.length > 0 && (
