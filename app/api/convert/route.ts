@@ -14,6 +14,15 @@ turndown.addRule("strikethrough", {
   replacement: (content) => `~~${content}~~`,
 });
 
+// Ignore images and other embedded non-text content: only the text is converted.
+turndown.remove(["img", "picture", "video", "audio", "object", "embed"]);
+
+const mammothOptions = {
+  // Drop images instead of embedding them as base64 data URIs; turndown strips the resulting <img> tags.
+  convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: "" })),
+};
+
+
 function toMarkdownFilename(originalName: string) {
   const base = originalName.replace(/\.docx?$/i, "");
   return `${base}.md`;
@@ -47,7 +56,7 @@ export async function POST(request: Request) {
 
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const { value: html } = await mammoth.convertToHtml({ buffer });
+      const { value: html } = await mammoth.convertToHtml({ buffer }, mammothOptions);
       const markdown = turndown.turndown(html).trim() + "\n";
       results.push({ name: toMarkdownFilename(file.name), markdown });
     } catch (error) {
